@@ -1,58 +1,64 @@
-namespace workerservice
+using Microsoft.Extensions.Configuration;
+
+public class BackgroundWorkerService : BackgroundService
 {
-    public class Worker : BackgroundService
+    private readonly ILogger<BackgroundWorkerService> _logger;
+    private readonly IConfiguration _configuration;
+    private readonly TimeSpan _period = TimeSpan.FromSeconds(5);
+    public string Filelocation;
+    public string Filename;
+
+
+    public BackgroundWorkerService(ILogger<BackgroundWorkerService> logger, IConfiguration configuration)
     {
-        private readonly ILogger<Worker> _logger;
-        private readonly IConfiguration _configuration;
-        public Worker(ILogger<Worker> logger,IConfiguration configuration)
-        {
-            _logger = logger;
-            _configuration = configuration;
-        }
+        _logger = logger;
+        _configuration = configuration;
+        Filelocation = _configuration.GetValue<string>("Filepath");
+        Filename = _configuration.GetValue<string>("Filename");
+    }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-                string Filelocation = _configuration.GetValue<string>("Filepath");
-                string Filename = _configuration.GetValue<string>("Filename");
-                Createfile(Filelocation, Filename);
-                await Task.Delay(5000);
-                Deletefile(Filelocation);
-                await Task.Delay(5000, stoppingToken);
-            }
-        }
 
-        private void Deletefile(string Filelocation)
-        {
-            try
-            {
-                string[] Files = Directory.GetFiles(Filelocation);
-                foreach (var file in Files)
-                {
-                    File.Delete(file);
-                    _logger.LogInformation("File deleted successfully:{file}", file,DateTime.Now);
-                }
-            }
-            catch(Exception exc) {
-                _logger.LogInformation(exc.Message);
-            
-            }
-        }
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using PeriodicTimer timer = new PeriodicTimer(_period);
+        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
+        {          
 
-        private void Createfile(string Filelocation, string Filename)
-        {
-            var file = Filelocation + "\\" + Filename;
-            if (!File.Exists(file))
-            {
-                for (int i = 0; i <= 100; i++)
-                {
-                    var Fname = Filelocation + "\\" + "Workerfile_" + i + ".txt";
-                    File.Create(Fname);
-                    _logger.LogInformation("File created:{Fname} successfully", Fname);
-                }
-            }
+            Createfile(Filelocation, Filename);
+            _logger.LogInformation(DateTime.Now.ToString());           
+
         }
-        }
+    }
+    private void Createfile(string Filelocation, string Filename)
+    {
+        var Fname = Filelocation + "\\" + Filename;      
+
+        string text = "File created " + DateTime.Now.ToString() + " " + "\n";
+        File.AppendAllText(Fname, text);
+        _logger.LogInformation(Fname);
+     
+
+    }
+
+
+    public override Task StartAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Service started.");
+        var Fname = Filelocation + "\\" + Filename;
+        string text = "Service started" + "\n";
+        File.AppendAllText(Fname, text);
+         return base.StartAsync(cancellationToken);
+
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Service stopped.");
+        var Fname = Filelocation + "\\" + Filename;
+        string text = "Service stopped";
+        File.AppendAllText(Fname, text);
+        return base.StopAsync(cancellationToken);
+
+
+    }
 }
